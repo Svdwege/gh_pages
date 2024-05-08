@@ -16,4 +16,4 @@ asciidoctor:
     icons: font
     idseparator: _
     stylesdir: css
-    source-highlighter: coderay
+    source-highlighter: rouge

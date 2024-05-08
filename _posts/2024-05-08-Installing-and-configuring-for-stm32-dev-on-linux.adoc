@@ -1,0 +1,185 @@
+= Configuring Linux for STM32 development
+:showtitle:
+:page-navtitle: Configuring Linux for STM32 development
+:page-excerpt: Configuring linux for STM32 development requires a few things
+:page-root: ../../../
+:icons: font
+
+== Installing GCC and the STM32IDE 
+First get the ARM toolchain linked in the downloads at the bottom of the page. Together with the STM32 IDE which is also linked in the download section.
+
+=== Installing GCC
+GCC can be installed any where on the system. I installed it in `~/opt/gcc-arm-none-eabi-13-2` 
+After extracting the archive it should be added to your path in `.bashrc` or `.zshrc` depending on your shell.
+
+.zshrc or .bashrc with arm gcc appended to path
+[source, bash]
+----
+export PATH="$PATH:/your/install/path/here/gcc-arm-none-eabi-13-2/bin"
+----
+
+Once done adding to the path the following can be used to test if gcc was installed correctly.
+Ensure before testing that the the shell has been reloaded, or the .bashrc or .zshrc file has been sourced.
+
+[source, bash]
+----
+arm-none-eabi-gcc --version
+----
+
+=== STM32cubeIDE
+
+NOTE: installing STM32cubeIDE can be ommitted if you dont plan on using it. Since it would be better to install STM32CubeMX instead since it allows creating projects which build using Makefiles. And the install Procedure is the same
+
+Installing the STM32 ide is as simple as downloading the version for your system, mine would be the RPM installer for Fedora.
+Extracting the archive and running the installer. 
+
+
+
+
+== Building a project from the command line
+
+To create a project which is easily build from the command line, its easiest to use the STM32CubeMX to create the project. 
+When creating the project the Toolchain/ide option should be Makefiles to create a project which uses Makefiles.
+Then the desired features and pins can be selected and configured.
+
+NOTE: Personally I activate the `generate peripheral initialisation in separate pair of .c/.h files` as it makes it easier to find certain functions and initialisation data.
+
+
+A example project can be found https://github.com/Svdwege/STM32ExamplePRJ[here]
+
+
+
+== Debugging a project from the editor
+
+To debug a embedded c project from your editor is going to be dependant on the editor used.
+I personally use nvim, and the following will be for that and not for other editor though the principle should be similar if not the same.
+
+CAUTION: My config is still made with Packer.nvim which has been deprecated, and i haven't taken the time to update it.
+
+Currently the plugins related to nvim-dap that I'm using are:
+
+. mfussenegger/nvim-dap
+. rcarriga/nvim-dap-ui
+. theHamsta/nvim-dap-virtual-text
+. nvim-telescope/telescope-dap.nvim
+
+the following code is the Packer.lua file extract
+
+[source,lua]
+----
+return require('packer').startup(function(use)
+    --...
+
+    use {
+        'nvim-telescope/telescope.nvim', tag = '0.1.5',
+        -- or                            , branch = '0.1.x',
+        requires = { { 'nvim-lua/plenary.nvim' } }
+    }
+
+    --...
+
+    use 'nvim-telescope/telescope-dap.nvim'
+
+    use 'mfussenegger/nvim-dap'
+    use { "rcarriga/nvim-dap-ui", requires = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" } }
+    use 'theHamsta/nvim-dap-virtual-text'
+
+    -- ...
+end)
+----
+
+[source,lua]
+----
+local dap, dapui = require("dap"), require("dapui")
+require("nvim-dap-virtual-text").setup()
+
+
+local pickers = require("telescope.pickers")
+local finders = require("telescope.finders")
+local conf = require("telescope.config").values
+local actions = require("telescope.actions")
+local action_state = require("telescope.actions.state")
+
+
+dap.adapters.gdb = {
+    type = "executable",
+    command = "gdb",
+    args = { "-i", "dap" }
+}
+
+dap.adapters.lldb = {
+    type = 'executable',
+    command = '/usr/bin/lldb-vscode', -- adjust as needed, must be absolute path
+    name = 'lldb'
+}
+
+
+dap.configurations.cpp = {
+    {
+        name = 'Launch',
+        type = 'lldb',
+        request = 'launch',
+        program = function()
+            return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
+        end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        args = {},
+    },
+}
+
+dap.configurations.rust = dap.configurations.cpp
+
+require("dapui").setup()
+dap.listeners.after.event_initialized["dapui_config"] = function()
+    dapui.open()
+end
+dap.listeners.before.event_terminated["dapui_config"] = function()
+    dapui.close()
+end
+dap.listeners.before.event_exited["dapui_config"] = function()
+    dapui.close()
+end
+
+----
+
+Some excerpts have been made in the above code listing. One of the excerpts is the following which sets up two commands in neovim to configure c debugging 
+
+.Commands to set the configuration for C debugging
+[source,lua]
+----
+vim.api.nvim_create_user_command("DebugEmbedded", function()
+        dap.configurations.c = {
+        {
+        name = "Launch",
+        type = "gdb",
+        request = "launch",
+        program = function()
+        return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
+        end,
+        cwd = "${workspaceFolder}",
+        },
+        }
+        dap.configurations.cpp = dap.configurations.c
+        dap.configurations.zig = dap.configurations.c
+        end, { nargs = 0 })
+
+vim.api.nvim_create_user_command("DebugLinux", function()
+        dap.configurations.c = dap.configurations.cpp
+        end, { nargs = 0 })
+
+----
+
+
+
+
+
+//TODO: nvim dap setup
+//TODO: command to switch from embedded dbg and naitive dbg
+//TODO: dap config
+
+
+== Downloads
+- https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz?rev=e434b9ea4afc4ed7998329566b764309&hash=CA590209F5774EE1C96E6450E14A3E26[ARM GCC none eabi]
+- https://www.st.com/en/development-tools/stm32cubeide.html[STM32IDE Download]
+- https://www.st.com/en/development-tools/stm32cubeide.html[STM32CubeMX Download]
