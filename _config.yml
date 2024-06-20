@@ -16,4 +16,5 @@ asciidoctor:
     icons: font
     idseparator: _
     stylesdir: css
-    source-highlighter: rouge
+    source-highlighter: pygments
+    pygments-css: class
